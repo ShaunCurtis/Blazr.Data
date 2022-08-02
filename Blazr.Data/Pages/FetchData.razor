@@ -1,15 +1,14 @@
 ﻿@page "/fetchdata"
+@using Blazr.Data.Data
+@inject WeatherForecastViewService Service
 
 <PageTitle>Weather forecast</PageTitle>
 
-@using Blazr.Data.Data
-@inject WeatherForecastDatasService ForecastService
-
-<h1>Weather forecast</h1>
+<h1>Weather Forecasts</h1>
 
 <p>This component demonstrates fetching data from a service.</p>
 
-@if (forecasts == null)
+@if (this.Service.Records == null)
 {
     <p><em>Loading...</em></p>
 }
@@ -25,7 +24,7 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var forecast in forecasts)
+            @foreach (var forecast in this.Service.Records)
             {
                 <tr>
                     <td>@forecast.Date.ToShortDateString()</td>
@@ -39,10 +38,6 @@ else
 }
 
 @code {
-    private WeatherForecast[]? forecasts;
-
     protected override async Task OnInitializedAsync()
-    {
-        forecasts = await ForecastService.GetForecastAsync(DateTime.Now);
-    }
+        => await Service.GetRecordsAsync();
 }

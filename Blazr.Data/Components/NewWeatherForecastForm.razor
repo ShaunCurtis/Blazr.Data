@@ -1,0 +1,50 @@
+﻿@inject WeatherForecastViewService Service 
+
+@if (this.show)
+{
+    <div class="m-2 p-3 bg-light border border-1 border-primary">
+    <h4>NewWeatherForecastForm</h4>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12 text-secondary">
+                Normally edit controls appear here
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 text-end">
+                <button class="btn btn-sm btn-success" @onclick=AddRecord>Add Record</button>
+                <button class="btn btn-sm btn-dark" @onclick=Exit>Exit</button>
+            </div>
+        </div>
+    </div>
+    </div>
+}
+
+@code {
+    private TaskCompletionSource? taskSource;
+
+    private bool show { get; set; } = false;
+
+    private async Task AddRecord()
+    {
+        await Service.AddRecordAsync();
+        show = false;
+        StateHasChanged();
+        taskSource?.SetResult();
+    }
+
+    private void Exit()
+    {
+        show = false;
+        StateHasChanged();
+        taskSource?.SetResult();
+    }
+
+    public Task ShowForm()
+    {
+        show = true;
+        StateHasChanged();
+        taskSource = new TaskCompletionSource();
+        return taskSource.Task;
+    }
+}
