@@ -1,6 +1,6 @@
 # Blazor - Get your Data out of Your Components
 
-This article was sparked by the number of questions I see where the root cause of the problem is trying to manage data in UI components.  Here's a typical example:
+Writing this article was sparked by the number of questions I answer where the root cause of the problem is trying to manage data in the UI components.  Something like this:
 
 ```csharp
 private WeatherForecast[]? forecasts;
@@ -11,7 +11,9 @@ protected override async Task OnInitializedAsync()
 
 You may recognise this code.  It comes directly from `FetchData` in the Blazor templates: it's Microsoft distributed code.  Unfortunately that doesn't make it a good practice.  It just misleads.
 
-So what should it look like?  This article keeps things as simple as possible.  The code is *For Demo Purposes*.  It's not production code because I've left out a lot of stuff that would make it more difficult to understand.  Read my footnote in the Appendix for the type of *stuff* that's missing.
+So what should it look like?  I'm going to keep this as simple as possible.  The code in this article is *For Demo Purposes*.  It's not production code because there's stuff missing that would clutter and make it more difficult to understand.  Read my footnote in the Appendix for the type of *stuff* thst is missing.
+
+I have included the use of `TaskCompletionSource` which is a fairly advanced coding technique to control the EditForm.  It's just too good an example not to use it, and it makes the code much more elegant.  See the Appendix for a more detailed discussion on it's use.
 
 ## Repository
 
@@ -19,15 +21,15 @@ You can find the project and the latest version of this article at: https://gith
 
 ## Starting Point
 
-The starting solution is the standard Blazor Server template.
+The starting solution for this project is the standard Blazor Server template.
 
-Everything will run in a WASM project, but you should implement an API `WeatherForecastDataService` => Controller => Server `WeatherForecastDataService` data pipeline to emulate a real life application.
+Everything will run in a WASM project, but you should really implement an API `WeatherForecastDataService` => Controller => Server `WeatherForecastDataService` data pipeline to emulate a real life application.
 
-Debugging is also much easier and straight forward on Server.   Note: the solution is implemented with `Nullable` enabled. 
+Debugging is also much easier and straight forward on Server. 
 
-## The Solution
+The solution is implemented with `Nullable` enabled. 
 
-First we need to re-organise our services.  The UI is currently plugged directly into the back-end data service.  We need to build a  UI => ViewService => DataService => DataStore pipeline.
+First we need to re-organise our services.
 
 ### WeatherForecast
 
@@ -46,14 +48,14 @@ public class WeatherForecast
 
 ### WeatherForecastService
 
-Rename `WeatherForecastService` to `WeatherForecastDataService`. 
+Rename this to `WeatherForecastDataService`. 
 
 It now:
 
-1. Maintains an internal list of `WeatherForcast` objects.  When `GetRecordsAsync` is called, it provides a copy of this list, not a reference to the internal list.  This emulates what a ORM such as Entity Framework would do.
+1. Maintains an internal list of `WeatherForcast` objects and when `GetRecordsAsync` is called it provides a copy of this list, not a reference to the list.  This now emulates what a ORM such as Entity Framework would do.
 2. Returns result objects that contains both status information and data.
 3. Returns `IEnumerable` collections: not lists or arrays.
-4. Has an `AddRecordAsync` method to add a record to the "data store".
+3. Has an `AddRecordAsync` method to add a record to the list.
 
 ```csharp
 public class WeatherForecastDataService
@@ -151,6 +153,7 @@ public class WeatherForecastViewService
             this.Records = result.Items;
             return true;
         }
+
         return false;
     }
 
@@ -171,6 +174,7 @@ public class WeatherForecastViewService
             if (await this.GetRecordsAsync())
                 this.ListUpdated?.Invoke(this, EventArgs.Empty);
         }
+
         return result.Success;
     }
 }
@@ -237,13 +241,15 @@ else
 
 ## Adding an Editor
 
-### WeatherForecastEditorForm
+### NewWeatherForecastForm
 
 This form emulates an edit form.  It's designed to be *inline*, so has control over show/hide.  It could be a modal dialog.
 
-It has one *Parameter*, no public properties and one public method.  The parent form communicates directly with it through the `Show` method and the component communicates back to the parent through the `FormClosed` callback.
+It has no *Parameters*, no public properties and only one public method.  The parent form communicates directly with it through the `Show` method.
 
-The Add and Exit methods set `show` to false, and invoke the callback to inform the parent of closure.
+It implements provider Task based management.  `TaskCompletionSource` is a Task provider.   When the consumer calls `ShowForm`, `show` is turned on and `StateHasChanged` called to queue a component render.  It creates a new task provider and passes the provider's `Task` back to the caller.
+
+The Add and Exit methods set `show` to false, and call `StateHasChanged` to queue a render event.  They set `taskSource` as completed and complete.  We'll see the consumer side effect of this in the main form shortly.
 
 The form injects `WeatherForecastViewService` and uses this to add the record to the data store.
  
@@ -271,7 +277,7 @@ The form injects `WeatherForecastViewService` and uses this to add the record to
 }
 
 @code {
-    [Parameter] public EventCallback FormClosed { get; set; }
+    private TaskCompletionSource? taskProvider;
 
     private bool show { get; set; } = false;
 
@@ -279,19 +285,23 @@ The form injects `WeatherForecastViewService` and uses this to add the record to
     {
         await Service.AddRecordAsync();
         show = false;
-        await FormClosed.InvokeAsync();
+        StateHasChanged();
+        taskProvider?.SetResult();
     }
 
     private void Exit()
     {
         show = false;
-        FormClosed.InvokeAsync();
+        StateHasChanged();
+        taskProvider?.SetResult();
     }
 
-    public void ShowForm()
+    public Task ShowForm()
     {
         show = true;
         StateHasChanged();
+        taskProvider = new TaskCompletionSource();
+        return taskProvider.Task;
     }
 }
 ```
@@ -303,19 +313,32 @@ This is our new `FetchData`.
 There's:
 1. A button block for *Add 
 A New Record* which is controlled by `addForm`.
-2. A `WeatherForecastEditorForm` referenced to a local private field.
+2. A `NewWeatherForecastForm` referenced to a local private field.
 3. An event receiver for the service `ListUpdated` event.
-4. A receiver for the editor `FormClosed` callback.
-5. `IDisposable` implemented to de-register the event handler correctly.
+4. `IDisposable` implemented to de-register the event handler correctly.
+
+The interesting code is in `ShowAddForm`.  
+
+1. It sets `addForm` to true and then calls `ShowForm` on `NewWeatherForecastForm`.  
+2. Once `ShowForm` completes, it passes a running Task back to `ShowAddForm`.
+3. `ShowAddForm` yields back to the UI handler while it awaits the completion of the task.  This also awaits and yields control back to the system.
+4. The UI Renderer gets thread time and runs the queued Render events: show `NewWeatherForecastForm`, hide the button block, and any other events.
+
+At this point `ShowAddForm` is *suspended*.  The code block following the `await` is scheduled as a continuation once the awaited task completes.    The thread is free to service any tasks it receives.  In our case either `Save` or `Exit` runs in `NewWeatherForecastForm` and sets the task to complete.  At which point:  
+
+5. `ShowAddForm` now runs to completion, setting `AddForm` to false.
+6. The UI event handler schedues a final render by calling `StateHasChanged` on the main form.
+7. The UI Renderer gets thread time and runs the queued render events:  hide `NewWeatherForecastForm` and show the button block.  
 
 ```csharp
-@page "/fetchdata"
+@page "/weatherforecasts"
+@implements IDisposable
 @using Blazr.Data.Data
 @inject WeatherForecastViewService Service
 
 <PageTitle>Weather forecast</PageTitle>
 
-<WeatherForecastEditorForm @ref=this.form FormClosed=this.OnFormClosed />
+<NewWeatherForecastForm @ref=form />
 
 @if (!addForm)
 {
@@ -334,7 +357,7 @@ A New Record* which is controlled by `addForm`.
 
 @code {
     private bool addForm = false;
-    private WeatherForecastEditorForm form = default!;
+    private NewWeatherForecastForm form = default!;
 
     protected override async Task OnInitializedAsync()
     {
@@ -342,14 +365,12 @@ A New Record* which is controlled by `addForm`.
         this.Service.ListUpdated += OnListUpdate;
     }
 
-    private void ShowAddForm()
+    private async Task ShowAddForm()
     {
         addForm = true;
-        form.ShowForm();
+        await form.ShowForm();
+        addForm = false;
     }
-
-    private void OnFormClosed()
-        => addForm = false;
 
     private void OnListUpdate(object? sender, EventArgs e)
         => this.InvokeAsync(StateHasChanged);
@@ -361,22 +382,52 @@ A New Record* which is controlled by `addForm`.
 
 ## Summary
 
-This article shows how to move data management into a view service, and how to use an event driven model to update components.
+This example shows how to move data management into a view service, and how to use an event driven model to update components.
 
-It's very easy to shortcut the design process and start wiring components together.  But you soon end up with a unmanaged mess that's impossible to debug and cluttered with calls to `StateHasChanged` to try (and often fail to) keep everything in sync.
+It's very easy to start wiring components together.  But you soon end up with a unmanaged mess that's impossible to debug and cluttered with calls to `StateHasChanged` to try (and often failing to) keep everything in sync.
 
 ## Appendix
 
 ### What's missing
 
-As I said in the introduction this code is *For Demo Purposes*.  There's nothing wrong with it: there are things missing that you would add/change in a production environment.  Here are a few examples:
+As I said in the introduction this code is *For Demo Purposes*.  It's not poor or unstructured, but there are things missing that you would add  in a production environment.  Here are a few examples:
 
 1. My services would make heavy use of generics to boilerplate a lot of the code.
-2. The View to Data service would be implemented through an interface to decouple the Core/Business domain code from the Data domain code.
-3. Each code domain would reside in different projects to enforce dependancy rules.
+2. The View to Data service would be implemented through interfaces to decouple the Core/Business domain code from the Data domain code.
+3. Each code domain would reside in different projects to enforce dependancies.
 4. Collection requests would always be constrained with request objects defining paging.
-5. Componentization of UI.  For example, the Add a New Record block would be a component or RenderFragment block.
 
+### TaskCompletionSource
+
+You are almost always the consumer of a `Task`, calling an `await`.  There are several examples in this project.  You can bulid Task based methods with `Task.Delay`, but you have no way of creating a true `Task` context.
+
+`TaskCompletionSource` is a `Task` provider: a manually controlled task wrapper that generates a `Task` you control through the wrapper.
+
+You normally declare one at the class level:
+
+```csharp
+private TaskCompletionSource? taskProvider;
+```
+
+And then create one when you need it:
+
+```csharp
+taskProvider = new TaskCompletionSource();
+```
+
+You can now pass a running `Task` back to a caller like this:
+
+```csharp
+return taskProvider.Task;
+```
+
+When whatever the class does completes you simply call: 
+
+```
+taskProvider?.SetResult();
+```
+
+The Task Manager sees this state change and runs the *continuation* - the rest of the code block in the caller.
 
 
 

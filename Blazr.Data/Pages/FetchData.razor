@@ -4,9 +4,20 @@
 
 <PageTitle>Weather forecast</PageTitle>
 
-<h1>Weather Forecasts</h1>
+<WeatherForecastEditorForm @ref=this.form FormClosed=this.OnFormClosed />
 
-<p>This component demonstrates fetching data from a service.</p>
+@if (!addForm)
+{
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12 text-end">
+                <button class="btn btn-sm btn-primary" @onclick=ShowAddForm>Add A New Record</button>
+            </div>
+        </div>
+    </div>
+}
+
+<h2>Weather Forecasts</h2>
 
 @if (this.Service.Records == null)
 {
@@ -38,6 +49,27 @@ else
 }
 
 @code {
+    private bool addForm = false;
+    private WeatherForecastEditorForm form = default!;
+
     protected override async Task OnInitializedAsync()
-        => await Service.GetRecordsAsync();
+    {
+        await Service.GetRecordsAsync();
+        this.Service.ListUpdated += OnListUpdate;
+    }
+
+    private void ShowAddForm()
+    {
+        addForm = true;
+        form.ShowForm();
+    }
+
+    private void OnFormClosed()
+        => addForm = false;
+
+    private void OnListUpdate(object? sender, EventArgs e)
+        => this.InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+        => this.Service.ListUpdated += OnListUpdate;
 }
