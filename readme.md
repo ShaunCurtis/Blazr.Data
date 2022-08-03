@@ -247,7 +247,7 @@ This form emulates an edit form.  It's designed to be *inline*, so has control o
 
 It has no *Parameters*, no public properties and only one public method.  The parent form communicates directly with it through the `Show` method.
 
-It implements provider Task based management.  `TaskCompletionSource` is a Task that we have full control over.  `taskSource = new TaskCompletionSource()` produces a yielded running task.   When the consumer calls `ShowForm`, `show` is turned on and `StateHasChanged` called to queue a component render.  It finally creates a yielded running task and passes it back to the caller.
+It implements provider Task based management.  `TaskCompletionSource` is a Task provider.   When the consumer calls `ShowForm`, `show` is turned on and `StateHasChanged` called to queue a component render.  It creates a new task provider and passes the provider's `Task` back to the caller.
 
 The Add and Exit methods set `show` to false, and call `StateHasChanged` to queue a render event.  They set `taskSource` as completed and complete.  We'll see the consumer side effect of this in the main form shortly.
 
@@ -277,7 +277,7 @@ The form injects `WeatherForecastViewService` and uses this to add the record to
 }
 
 @code {
-    private TaskCompletionSource? taskSource;
+    private TaskCompletionSource? taskProvider;
 
     private bool show { get; set; } = false;
 
@@ -286,22 +286,22 @@ The form injects `WeatherForecastViewService` and uses this to add the record to
         await Service.AddRecordAsync();
         show = false;
         StateHasChanged();
-        taskSource?.SetResult();
+        taskProvider?.SetResult();
     }
 
     private void Exit()
     {
         show = false;
         StateHasChanged();
-        taskSource?.SetResult();
+        taskProvider?.SetResult();
     }
 
     public Task ShowForm()
     {
         show = true;
         StateHasChanged();
-        taskSource = new TaskCompletionSource();
-        return taskSource.Task;
+        taskProvider = new TaskCompletionSource();
+        return taskProvider.Task;
     }
 }
 ```
@@ -320,14 +320,14 @@ A New Record* which is controlled by `addForm`.
 The interesting code is in `ShowAddForm`.  
 
 1. It sets `addForm` to true and then calls `ShowForm` on `NewWeatherForecastForm`.  
-2. Once `ShowForm` completes, it passes a yielded running Task back to `ShowAddForm`.
-3. `ShowAddForm` in turn yields back to the UI handler which yields back to the system.
-4. The UI Renderer gets thread time and runs the queued Render events: show `NewWeatherForecastForm` and hide the button block.
+2. Once `ShowForm` completes, it passes a running Task back to `ShowAddForm`.
+3. `ShowAddForm` yields back to the UI handler while it awaits the completion of the task.  This also awaits and yields control back to the system.
+4. The UI Renderer gets thread time and runs the queued Render events: show `NewWeatherForecastForm`, hide the button block, and any other events.
 
-At this point `ShowAddForm` is *suspended*.  The thread task manager knows all about it and monitors it, but doesn't do anything with it until the task state changes.  It services any tasks it receives.  In our case either `Save` or `Exit` runs in `NewWeatherForecastForm` and sets the task to complete.  At which point:  
+At this point `ShowAddForm` is *suspended*.  The code block following the `await` is scheduled as a continuation once the awaited task completes.    The thread is free to service any tasks it receives.  In our case either `Save` or `Exit` runs in `NewWeatherForecastForm` and sets the task to complete.  At which point:  
 
 5. `ShowAddForm` now runs to completion, setting `AddForm` to false.
-6. The UI event handler runs a final `StateHasChanged` on the main form.
+6. The UI event handler schedues a final render by calling `StateHasChanged` on the main form.
 7. The UI Renderer gets thread time and runs the queued render events:  hide `NewWeatherForecastForm` and show the button block.  
 
 ```csharp
@@ -401,35 +401,37 @@ As I said in the introduction this code is *For Demo Purposes*.  It's not poor o
 
 You are almost always the consumer of a `Task`, calling an `await`.  There are several examples in this project.  You can bulid Task based methods with `Task.Delay`, but you have no way of creating a true `Task` context.
 
-That's what `TaskCompletionSource` does.  It's a `Task` provider: a manually controlled task wrapper that generates a `Task` you control through the wrapper.
+`TaskCompletionSource` is a `Task` provider: a manually controlled task wrapper that generates a `Task` you control through the wrapper.
 
 You normally declare one at the class level:
 
 ```csharp
-private TaskCompletionSource? taskSource;
+private TaskCompletionSource? taskProvider;
 ```
 
 And then create one when you need it:
 
 ```csharp
-taskSource = new TaskCompletionSource();
+taskProvider = new TaskCompletionSource();
 ```
 
 You can now pass a running `Task` back to a caller like this:
 
 ```csharp
-return taskSource.Task;
+return taskProvider.Task;
 ```
 
-The Task that gets passed is a yielded Task, so the caller can yield control back to the system.
-
-When whatever the class does completes you simply call 
+When whatever the class does completes you simply call: 
 
 ```
-taskSource?.SetResult();
+taskProvider?.SetResult();
 ```
 
-The Task manager will pick uo this state change and run the rest of the code block in the caller,
+The Task Manager sees this state change and runs the *continuation* - the rest of the code block in the caller.
+
+
+
+
 
 
 

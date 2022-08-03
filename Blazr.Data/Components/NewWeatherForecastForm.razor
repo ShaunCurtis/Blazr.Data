@@ -21,7 +21,7 @@
 }
 
 @code {
-    private TaskCompletionSource? taskSource;
+    private TaskCompletionSource? taskProvider;
 
     private bool show { get; set; } = false;
 
@@ -30,21 +30,21 @@
         await Service.AddRecordAsync();
         show = false;
         StateHasChanged();
-        taskSource?.SetResult();
+        taskProvider?.SetResult();
     }
 
     private void Exit()
     {
         show = false;
         StateHasChanged();
-        taskSource?.SetResult();
+        taskProvider?.SetResult();
     }
 
     public Task ShowForm()
     {
         show = true;
         StateHasChanged();
-        taskSource = new TaskCompletionSource();
-        return taskSource.Task;
+        taskProvider = new TaskCompletionSource();
+        return taskProvider.Task;
     }
 }
