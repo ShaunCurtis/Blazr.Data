@@ -399,5 +399,37 @@ As I said in the introduction this code is *For Demo Purposes*.  It's not poor o
 
 ### TaskCompletionSource
 
-In almost all cases you make call
+You are almost always the consumer of a `Task`, calling an `await`.  There are several examples in this project.  You can bulid Task based methods with `Task.Delay`, but you have no way of creating a true `Task` context.
+
+That's what `TaskCompletionSource` does.  It's a `Task` provider: a manually controlled task wrapper that generates a `Task` you control through the wrapper.
+
+You normally declare one at the class level:
+
+```csharp
+private TaskCompletionSource? taskSource;
+```
+
+And then create one when you need it:
+
+```csharp
+taskSource = new TaskCompletionSource();
+```
+
+You can now pass a running `Task` back to a caller like this:
+
+```csharp
+return taskSource.Task;
+```
+
+The Task that gets passed is a yielded Task, so the caller can yield control back to the system.
+
+When whatever the class does completes you simply call 
+
+```
+taskSource?.SetResult();
+```
+
+The Task manager will pick uo this state change and run the rest of the code block in the caller,
+
+
 
