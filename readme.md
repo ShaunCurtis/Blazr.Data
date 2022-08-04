@@ -1,6 +1,6 @@
 # Blazor - Get your Data out of Your Components
 
-This article was sparked by the number of questions I see where the root cause of the problem is trying to manage data in UI components.  Here's a typical example:
+I've written this article because I see many questions asked on various forums and sites were the root cause is trying to manage data within UI components.  Here's a typical example:
 
 ```csharp
 private WeatherForecast[]? forecasts;
@@ -9,51 +9,43 @@ protected override async Task OnInitializedAsync()
     => forecasts = await ForecastService.GetForecastAsync(DateTime.Now);
 ```
 
-You may recognise this code.  It comes directly from `FetchData` in the Blazor templates: it's Microsoft distributed code.  Unfortunately that doesn't make it a good practice.  It just misleads.
+Recognise this block of code?  It comes directly from `FetchData` in the Blazor templates.  It's Microsoft distributed code, which gives it a stamp of approval it doesn't deserve.
 
-So what should it look like?  This article keeps things as simple as possible.  The code is *For Demo Purposes*.  It's not production code because I've left out a lot of stuff that would make it more difficult to understand.  Read my footnote in the Appendix for the type of *stuff* that's missing.
+So what should it look like?  This article keeps things as simple as possible.  The code is *For Demo Purposes*: it's not full production code because I've left out stuff that would make it more difficult to read and understand.  Read my footnote in the Appendix for more information on what's missing.
 
 ## Repository
 
-You can find the project and the latest version of this article at: https://github.com/ShaunCurtis/Blazr.Data
+You can find the project and the latest version of this article here at my  [Blazr.Data Github Repository](https://github.com/ShaunCurtis/Blazr.Data).
 
 ## Starting Point
 
-The starting solution is the standard Blazor Server template.
-
-Everything will run in a WASM project, but you should implement an API `WeatherForecastDataService` => Controller => Server `WeatherForecastDataService` data pipeline to emulate a real life application.
-
-Debugging is also much easier and straight forward on Server.   Note: the solution is implemented with `Nullable` enabled. 
+The starting solution for the code is the standard Blazor Server template.  I can keep the code simpler in Server and debugging is much quicker and easier.   Note that the solution is implemented with `Nullable` enabled. 
 
 ## The Solution
 
-First we need to re-organise our services.  The UI is currently plugged directly into the back-end data service.  We need to build a  UI => ViewService => DataService => DataStore pipeline.
+First some re-organisation.  The UI is currently plugged directly into the back-end data service.  We need to re-build the data pipeline to look like this:
 
-### WeatherForecast
+```text
+UI <=> View Service <=> Data Service <=> Data Store
+```
 
-Add a `Uid` field to provide a unique Id for the record.  All records should have some form of Id!
+If you want to implement this is WASM your data pipeline whould look like this:
 
-```csharp
-public class WeatherForecast
-{
-    public Guid Uid { get; set; }
-    public DateTime Date { get; set; }
-    public int TemperatureC { get; set; }
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-    public string? Summary { get; set; }
-}
-``` 
+```text
+UI <=> View Service <=> API Data Service <=> [Network] <=> Controller <=> Server Data Service <=> Data Store
+```
 
-### WeatherForecastService
+### WeatherForecastDataService
 
-Rename `WeatherForecastService` to `WeatherForecastDataService`. 
+Rename `WeatherForecastService` to `WeatherForecastDataService`.  This combines the *Data Service* and *Data Store* layers.
 
 It now:
 
-1. Maintains an internal list of `WeatherForcast` objects.  When `GetRecordsAsync` is called, it provides a copy of this list, not a reference to the internal list.  This emulates what a ORM such as Entity Framework would do.
-2. Returns result objects that contains both status information and data.
-3. Returns `IEnumerable` collections: not lists or arrays.
-4. Has an `AddRecordAsync` method to add a record to the "data store".
+1. Maintains an internal list of `WeatherForcast` objects.  
+2. `GetRecordsAsync` provides a copy of `WeatherForcast` not a reference to the internal list.  What an *ORM* such as Entity Framework would do.
+3. Returns result objects containing both status information and data.
+4. Returns `IEnumerable` collections: not lists or arrays.
+5. Has an `AddRecordAsync` method to add a record to the "data store".
 
 ```csharp
 public class WeatherForecastDataService
@@ -71,7 +63,6 @@ public class WeatherForecastDataService
         {
             var insertRecord = new WeatherForecast
             {
-                Uid = record.Uid,
                 Date = record.Date,
                 TemperatureC = record.TemperatureC,
                 Summary = record.Summary
@@ -92,8 +83,7 @@ public class WeatherForecastDataService
         foreach (var item in WeatherForecasts!)
             list.Add(new WeatherForecast
             {
-                Uid = item.Uid,
-                Date = DateTime.Now,
+                Date = item.Date,
                 TemperatureC = item.TemperatureC,
                 Summary = item.Summary
             });
@@ -106,7 +96,6 @@ public class WeatherForecastDataService
         var startDate = DateTime.Now;
         this.WeatherForecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
         {
-            Uid = Guid.NewGuid(),
             Date = startDate.AddDays(index),
             TemperatureC = Random.Shared.Next(-20, 55),
             Summary = Summaries[Random.Shared.Next(Summaries.Length)]
@@ -115,15 +104,52 @@ public class WeatherForecastDataService
 }
 ```
 
+### Result Records
+
+These are the objects returned by the data layer.  They are `records` because they need to be serializable to use in API calls. 
+
+`RecordListResult` is returned by all collection/list queries.
+
+```csharp
+public record RecordListResult<TRecord>
+{
+    public IEnumerable<TRecord> Items { get; init; } = Enumerable.Empty<TRecord>();
+    public bool Success { get; init; }
+    public string Message { get; init; } = string.Empty;
+
+    public static RecordListResult<TRecord> Successful(IEnumerable<TRecord> items)
+        => new RecordListResult<TRecord> { Items = items, Success = true };
+
+    public static RecordListResult<TRecord> Failure(string message)
+        => new RecordListResult<TRecord> { Success = false, Message = message };
+}
+```
+
+`RecordCommandResult` is returned by all commands: Add/Delete/Update.
+
+```csharp
+public record RecordCommandResult
+{
+    public bool Success { get; init; }
+    public string Message { get; init; } = string.Empty;
+
+    public static RecordCommandResult Successful()
+        => new RecordCommandResult { Success = true };
+
+    public static RecordCommandResult Failure(string message)
+        => new RecordCommandResult { Success = false, Message = message };
+}
+```
+
 ### WeatherForecastViewService
 
-Add a new service class to provide the data to the UI.
+`WeatherForecastViewService` is the *View Service*.  It provides the necessary services to the UI.
 
 It:
 
-1. Gets the Data service through DI on object instantiation.
-2. Holds the record collection.
-3. Provides methods to get and add records.
+1. Obtains the registered Data service through DI on object instantiation.
+2. Provides methods to get and add records.
+3. Provides the record collection.
 4. Provides an event the UI can use for list update notifications.
 
 ```csharp
@@ -138,14 +164,14 @@ public class WeatherForecastViewService
 
     public WeatherForecast? Record { get; private set; }
 
-    public string LatestErroMessage { get; private set; } = string.Empty;
+    public string LatestErrorMessage { get; private set; } = string.Empty;
 
     public event EventHandler? ListUpdated;
 
     public async ValueTask<bool> GetRecordsAsync()
     {
         var result = await _dataService.GetRecordsAsync();
-        this.LatestErroMessage = result.Message;
+        this.LatestErrorMessage = result.Message;
         if (result.Success)
         {
             this.Records = result.Items;
@@ -158,13 +184,12 @@ public class WeatherForecastViewService
     {
         this.Record = new WeatherForecast
         {
-            Uid = Guid.NewGuid(),
             Date = DateTime.Now,
             TemperatureC = 20,
             Summary = "Testing"
         };
         var result = await _dataService.AddRecordAsync(Record);
-        this.LatestErroMessage = result.Message;
+        this.LatestErrorMessage = result.Message;
 
         if (result.Success)
         {
@@ -176,9 +201,9 @@ public class WeatherForecastViewService
 }
 ```
 
-### Services
+### Service Registration
 
-Make sure these two services are registered in `Program`. `WeatherForecastViewService` is Scoped, one per SPA session.  
+Register these two services in `Program`. `WeatherForecastViewService` is Scoped, so each SPA session has it's own instance.  
 
 ```csharp
 builder.Services.AddSingleton<WeatherForecastDataService>();
@@ -187,7 +212,11 @@ builder.Services.AddScoped<WeatherForecastViewService>();
 
 ### FetchData
 
-We can now update `FetchData`.  It injects `WeatherForecastViewService`, loads the data in `OnInitializedAsync` and accesses the view record collection directly.  There's no data held in the UI.  
+We can now update the `FetchData` UI Component.  It:
+
+1. Injects the registerted instance of `WeatherForecastViewService`.
+2. Loads the View in `OnInitializedAsync`.
+3. Uses `Service.Records` as it's data source.  There's no data held directly in the component.  
 
 ```csharp
 @page "/fetchdata"
@@ -239,13 +268,16 @@ else
 
 ### WeatherForecastEditorForm
 
-This form emulates an edit form.  It's designed to be *inline*, so has control over show/hide.  It could be a modal dialog.
+This emulates an edit form.  It's designed to be *inline*, so has control over show/hide.  It could be a modal dialog.
 
-It has one *Parameter*, no public properties and one public method.  The parent form communicates directly with it through the `Show` method and the component communicates back to the parent through the `FormClosed` callback.
+It has one *Parameter*, no public properties and one public method.  
 
-The Add and Exit methods set `show` to false, and invoke the callback to inform the parent of closure.
+ - The parent form communicates directly with the component through the `Show` method
+ - The component communicates with the parent through the `FormClosed` callback.
 
-The form injects `WeatherForecastViewService` and uses this to add the record to the data store.
+The internal Add and Exit methods close the component by setting `show` to false, and then invoke the callback to inform the parent of closure.
+
+The form injects the registered instance of `WeatherForecastViewService` and uses `AddRecordAsync` to add a record to the data store.
  
 ```csharp
 @inject WeatherForecastViewService Service 
@@ -296,16 +328,17 @@ The form injects `WeatherForecastViewService` and uses this to add the record to
 }
 ```
 
-### WeatherForecasts
+Note that `ShowForm` calls `StateHasChanged`.  It's not a UI event handler, so there's no automated render events.
 
-This is our new `FetchData`.  
+### FetchData
+
+The modified `FetchData`.  
 
 There's:
-1. A button block for *Add 
-A New Record* which is controlled by `addForm`.
+1. A button block for *Add A New Record*:  the block display is controlled by `addForm`.
 2. A `WeatherForecastEditorForm` referenced to a local private field.
-3. An event receiver for the service `ListUpdated` event.
-4. A receiver for the editor `FormClosed` callback.
+3. An event receiver for the View Service `ListUpdated` event.
+4. A receiver for the edit form `FormClosed` callback.
 5. `IDisposable` implemented to de-register the event handler correctly.
 
 ```csharp
@@ -361,18 +394,22 @@ A New Record* which is controlled by `addForm`.
 
 ## Summary
 
-This article shows how to move data management into a view service, and how to use an event driven model to update components.
+Some notes:
 
-It's very easy to shortcut the design process and start wiring components together.  But you soon end up with a unmanaged mess that's impossible to debug and cluttered with calls to `StateHasChanged` to try (and often fail to) keep everything in sync.
+1. You don't need to call `StateHasChanged` in UI event handlers such as `Exit` and `ShowForm`: the `ComponentBase` UI event handler calls them automatically.  The only call in the code is in `ShowForm` in the editor.  This is a standard method so there's no automated calls.
+ 
+2. All calls into the data pipeline return *Result* objects.  These provide a mechanism for returning both the result and status information about the request.
+
+3. Using events in the View layer provide a simple mechanism for maintaining state.  It's very easy to shortcut the design process and start wiring components together.  But you quickly code an unmanaged mess that's impossible to debug and cluttered with calls to `StateHasChanged` to try (and often fail to) keep everything in sync.
 
 ## Appendix
 
 ### What's missing
 
-As I said in the introduction this code is *For Demo Purposes*.  There's nothing wrong with it: there are things missing that you would add/change in a production environment.  Here are a few examples:
+As I said in the introduction this code is *For Demo Purposes*.  There's nothing wrong with it: I just kept it simple.  Here are a few *complexities* that would appear in my production code:
 
-1. My services would make heavy use of generics to boilerplate a lot of the code.
-2. The View to Data service would be implemented through an interface to decouple the Core/Business domain code from the Data domain code.
+1. My services would be heavy on generics to boilerplate a lot of the code.
+2. View to Data services would be implemented through interfaces to decouple the Core/Business domain code from the Data domain code.
 3. Each code domain would reside in different projects to enforce dependancy rules.
 4. Collection requests would always be constrained with request objects defining paging.
 5. Componentization of UI.  For example, the Add a New Record block would be a component or RenderFragment block.

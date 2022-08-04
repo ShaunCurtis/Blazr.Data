@@ -1,4 +1,4 @@
-using Blazr.Data.Data;
+using Blazr.App.Data;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 

@@ -1,4 +1,4 @@
-namespace Blazr.Data.Data;
+namespace Blazr.App.Data;
 
 public class WeatherForecastDataService
 {
@@ -15,7 +15,6 @@ public class WeatherForecastDataService
         {
             var insertRecord = new WeatherForecast
             {
-                Uid = record.Uid,
                 Date = record.Date,
                 TemperatureC = record.TemperatureC,
                 Summary = record.Summary
@@ -38,8 +37,7 @@ public class WeatherForecastDataService
         foreach (var item in WeatherForecasts!)
             list.Add(new WeatherForecast
             {
-                Uid = item.Uid,
-                Date = DateTime.Now,
+                Date = item.Date,
                 TemperatureC = item.TemperatureC,
                 Summary = item.Summary
             });
@@ -52,7 +50,6 @@ public class WeatherForecastDataService
         var startDate = DateTime.Now;
         this.WeatherForecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
         {
-            Uid = Guid.NewGuid(),
             Date = startDate.AddDays(index),
             TemperatureC = Random.Shared.Next(-20, 55),
             Summary = Summaries[Random.Shared.Next(Summaries.Length)]

@@ -1,9 +1,7 @@
-namespace Blazr.Data.Data;
+namespace Blazr.App.Data;
 
 public class WeatherForecast
 {
-    public Guid Uid { get; set; }
-    
     public DateTime Date { get; set; }
 
     public int TemperatureC { get; set; }

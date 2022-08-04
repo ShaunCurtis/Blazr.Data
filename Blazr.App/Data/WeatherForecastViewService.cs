@@ -1,4 +1,4 @@
-﻿namespace Blazr.Data.Data;
+﻿namespace Blazr.App.Data;
 
 public class WeatherForecastViewService
 {
@@ -32,7 +32,6 @@ public class WeatherForecastViewService
     {
         this.Record = new WeatherForecast
         {
-            Uid = Guid.NewGuid(),
             Date = DateTime.Now,
             TemperatureC = 20,
             Summary = "Testing"
