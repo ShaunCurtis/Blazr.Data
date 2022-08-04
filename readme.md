@@ -15,7 +15,7 @@ So what should it look like?  This article keeps things as simple as possible.  
 
 ## Repository
 
-You can find the project and the latest version of this article here at my  [Blazr.Data Github Repository](https://github.com/ShaunCurtis/Blazr.Data).
+You can find the project and the latest version of this article here on my  [Blazr.Data Github Repository](https://github.com/ShaunCurtis/Blazr.Data).
 
 ## Starting Point
 
