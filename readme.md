@@ -1,4 +1,4 @@
-# Blazor - Get your Data out of Your Components
+# Get your Data out of Your Blazor UI
 
 This article takes the standard Blazor template and demonstrates how to move the data and it's management out of the UI.  There are many questions posted on forums and sites by programmers were the root cause of their problem is trying to manage data within the UI.  The quick answer to many is a bit more inter component wiring to patch it together, but fundimentally the design is flawed.  Add a bit more functionality and it all breaks again.
 
