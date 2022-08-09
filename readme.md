@@ -1,6 +1,8 @@
 # Blazor - Get your Data out of Your Components
 
-I've written this article because I see many questions asked on various forums and sites were the root cause is trying to manage data within UI components.  Here's a typical example:
+I've written this article because I see many questions asked on various forums and sites were the root cause is trying to manage data within UI components.  The symptoms can often be fixed by adding a bit more wiring, but fundimentally such a design is flawed.  Adding functionality will break it again.
+
+Here's a typical example:
 
 ```csharp
 private WeatherForecast[]? forecasts;
@@ -9,9 +11,9 @@ protected override async Task OnInitializedAsync()
     => forecasts = await ForecastService.GetForecastAsync(DateTime.Now);
 ```
 
-Recognise this block of code?  It comes directly from `FetchData` in the Blazor templates.  It's Microsoft distributed code, which gives it a stamp of approval it doesn't deserve.
+Recognise this block of code?  It comes directly from `FetchData` in the Blazor template.  It's Microsoft distributed code, which gives it a stamp of approval it doesn't deserve.
 
-So what should it look like?  This article keeps things as simple as possible.  The code is *For Demo Purposes*: it's not full production code because I've left out stuff that would make it more difficult to read and understand.  Read my footnote in the Appendix for more information on what's missing.
+So what should it look like?  I keep things simple in this article.  The code is *For Demo Purposes*: it's not full production code because I've left out stuff that adds complexity and makes it more difficult to read and understand.  Read my footnote in the Appendix for more information on what's missing.
 
 ## Repository
 
@@ -19,7 +21,7 @@ You can find the project and the latest version of this article here on my  [Bla
 
 ## Starting Point
 
-The starting solution for the code is the standard Blazor Server template.  I can keep the code simpler in Server and debugging is much quicker and easier.   Note that the solution is implemented with `Nullable` enabled. 
+The starting solution for the code is the standard Blazor Server template.  I use Server because again it simpler to implement and debugging is much quicker.  The solution is implemented with `Nullable` enabled. 
 
 ## The Solution
 
@@ -29,7 +31,7 @@ First some re-organisation.  The UI is currently plugged directly into the back-
 UI <=> View Service <=> Data Service <=> Data Store
 ```
 
-If you want to implement this is WASM your data pipeline whould look like this:
+The WASM data pipeline looks like this:
 
 ```text
 UI <=> View Service <=> API Data Service <=> [Network] <=> Controller <=> Server Data Service <=> Data Store
@@ -45,7 +47,7 @@ It now:
 2. `GetRecordsAsync` provides a copy of `WeatherForcast` not a reference to the internal list.  What an *ORM* such as Entity Framework would do.
 3. Returns result objects containing both status information and data.
 4. Returns `IEnumerable` collections: not lists or arrays.
-5. Has an `AddRecordAsync` method to add a record to the "data store".
+5. Has an `AddRecordAsync` method to add a record to the data store.
 
 ```csharp
 public class WeatherForecastDataService
@@ -143,7 +145,7 @@ public record RecordCommandResult
 
 ### WeatherForecastViewService
 
-`WeatherForecastViewService` is the *View Service*.  It provides the necessary services to the UI.
+`WeatherForecastViewService` is the *View Service*.  It provides the data to the UI.
 
 It:
 
@@ -203,7 +205,7 @@ public class WeatherForecastViewService
 
 ### Service Registration
 
-Register these two services in `Program`. `WeatherForecastViewService` is Scoped, so each SPA session has it's own instance.  
+Register these two services in `Program`. `WeatherForecastViewService` is Scoped: each SPA session has it's own instance.  
 
 ```csharp
 builder.Services.AddSingleton<WeatherForecastDataService>();
