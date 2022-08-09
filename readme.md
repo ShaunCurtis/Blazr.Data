@@ -1,6 +1,8 @@
 # Blazor - Get your Data out of Your Components
 
-I've written this article because I see many questions asked on various forums and sites were the root cause is trying to manage data within UI components.  Here's a typical example:
+This article takes the standard Blazor template and demonstrates how to move data and it's management out of the UI.  There are many questions posted on forums and sites by programmers were the root cause of their problem is trying to manage data within the UI.  The quick answer to many is a bit more inter component wiring to patch it together, but fundimentally the design is flawed.  Add a bit more functionality and it all breaks again.
+
+Here's a typical example:
 
 ```csharp
 private WeatherForecast[]? forecasts;
@@ -9,17 +11,17 @@ protected override async Task OnInitializedAsync()
     => forecasts = await ForecastService.GetForecastAsync(DateTime.Now);
 ```
 
-Recognise this block of code?  It comes directly from `FetchData` in the Blazor templates.  It's Microsoft distributed code, which gives it a stamp of approval it doesn't deserve.
+Recognise this block of code?  It comes directly from `FetchData` in the Blazor templates.  It's Microsoft distributed code, which gives it a stamp of approval it doesn't really deserve.
 
-So what should it look like?  This article keeps things as simple as possible.  The code is *For Demo Purposes*: it's not full production code because I've left out stuff that would make it more difficult to read and understand.  Read my footnote in the Appendix for more information on what's missing.
+I've tried to keep things as simple as possible in the article.  The code is *For Demo Purposes*: it's not full production code.  I've left out complexity that would make it more difficult to read and understand.  Read my footnote in the Appendix for more information on the kind of stuff that's missing.
 
 ## Repository
 
-You can find the project and the latest version of this article here on my  [Blazr.Data Github Repository](https://github.com/ShaunCurtis/Blazr.Data).
+The project and the latest version of this article here are here on my  [Blazr.Data Github Repository](https://github.com/ShaunCurtis/Blazr.Data).
 
 ## Starting Point
 
-The starting solution for the code is the standard Blazor Server template.  I can keep the code simpler in Server and debugging is much quicker and easier.   Note that the solution is implemented with `Nullable` enabled. 
+The starting solution for the code is the standard Blazor Server template.  I can keep the code simpler in Server, and debugging is quicker and easier.   Note that the solution is implemented with `Nullable` enabled. 
 
 ## The Solution
 
@@ -29,7 +31,7 @@ First some re-organisation.  The UI is currently plugged directly into the back-
 UI <=> View Service <=> Data Service <=> Data Store
 ```
 
-If you want to implement this is WASM your data pipeline whould look like this:
+The WASM your data pipeline whould look like this:
 
 ```text
 UI <=> View Service <=> API Data Service <=> [Network] <=> Controller <=> Server Data Service <=> Data Store
