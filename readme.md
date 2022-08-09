@@ -47,7 +47,7 @@ It now:
 2. `GetRecordsAsync` provides a copy of `WeatherForcast` not a reference to the internal list.  What an *ORM* such as Entity Framework would do.
 3. Returns result objects containing both status information and data.
 4. Returns `IEnumerable` collections: not lists or arrays.
-5. Has an `AddRecordAsync` method to add a record to the "data store".
+5. Has an `AddRecordAsync` method to add a record to the data store.
 
 ```csharp
 public class WeatherForecastDataService
@@ -145,7 +145,7 @@ public record RecordCommandResult
 
 ### WeatherForecastViewService
 
-`WeatherForecastViewService` is the *View Service*.  It provides the necessary services to the UI.
+`WeatherForecastViewService` is the *View Service*.  It provides the data to the UI.
 
 It:
 
@@ -205,7 +205,7 @@ public class WeatherForecastViewService
 
 ### Service Registration
 
-Register these two services in `Program`. `WeatherForecastViewService` is Scoped, so each SPA session has it's own instance.  
+Register these two services in `Program`. `WeatherForecastViewService` is Scoped: each SPA session has it's own instance.  
 
 ```csharp
 builder.Services.AddSingleton<WeatherForecastDataService>();
